@@ -314,6 +314,7 @@
                 <div class="controls">
                     <button class="btn-step" id="stepBtn">Step Through</button>
                     <button class="btn-run" id="runBtn">Run All</button>
+                    <button class="btn-edit" id="editBtn">Edit Memory</button>
                     <button class="btn-reset" id="resetBtn">Reset</button>
                 </div>
             </div>
@@ -502,6 +503,7 @@
         class UIController {
             constructor() {
                 this.cpu = new CPUSimulator();
+                this.editMode = false;
                 this.initializeUI();
                 this.attachEventListeners();
             }
@@ -528,10 +530,29 @@
                     const cell = document.createElement('div');
                     cell.className = 'memory-cell';
                     cell.id = `mem-${index}`;
-                    cell.innerHTML = `
-                        <div class="memory-address">Addr ${index}</div>
-                        <div class="memory-value">${value}</div>
-                    `;
+                    
+                    if (this.editMode) {
+                        cell.classList.add('editable');
+                        cell.innerHTML = `
+                            <div class="memory-address">Addr ${index}</div>
+                            <input type="text" 
+                                   class="memory-input" 
+                                   value="${value}" 
+                                   data-address="${index}"
+                                   placeholder="Enter value">
+                        `;
+                        
+                        const input = cell.querySelector('input');
+                        input.addEventListener('change', (e) => this.updateMemory(index, e.target.value));
+                        input.addEventListener('focus', () => cell.classList.add('editing'));
+                        input.addEventListener('blur', () => cell.classList.remove('editing'));
+                    } else {
+                        cell.innerHTML = `
+                            <div class="memory-address">Addr ${index}</div>
+                            <div class="memory-value">${value}</div>
+                        `;
+                    }
+                    
                     grid.appendChild(cell);
                 });
             }
@@ -572,6 +593,39 @@
                     status.className = 'status ready';
                     status.textContent = 'Ready';
                 }
+            }
+
+            updateMemory(address, value) {
+                // Try to parse as number, otherwise keep as string (instruction)
+                const numValue = parseFloat(value);
+                this.cpu.memory[address] = isNaN(numValue) ? value : numValue;
+                this.addLog('info', `Memory[${address}] updated to: ${this.cpu.memory[address]}`);
+            }
+
+            toggleEditMode() {
+                this.editMode = !this.editMode;
+                const editBtn = document.getElementById('editBtn');
+                const stepBtn = document.getElementById('stepBtn');
+                const runBtn = document.getElementById('runBtn');
+                const memoryGrid = document.getElementById('memoryGrid');
+
+                if (this.editMode) {
+                    editBtn.textContent = 'Save Changes';
+                    editBtn.style.background = 'linear-gradient(135deg, #56ab2f 0%, #a8e063 100%)';
+                    stepBtn.disabled = true;
+                    runBtn.disabled = true;
+                    memoryGrid.classList.add('edit-mode');
+                    this.addLog('info', 'Edit mode enabled. Click on any memory cell to modify its value.');
+                } else {
+                    editBtn.textContent = 'Edit Memory';
+                    editBtn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                    stepBtn.disabled = false;
+                    runBtn.disabled = false;
+                    memoryGrid.classList.remove('edit-mode');
+                    this.addLog('info', 'Changes saved. Ready to execute.');
+                }
+
+                this.renderMemory();
             }
 
             async step() {
@@ -617,6 +671,10 @@
 
             reset() {
                 this.cpu.reset();
+                this.editMode = false;
+                document.getElementById('editBtn').textContent = 'Edit Memory';
+                document.getElementById('editBtn').style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+                document.getElementById('memoryGrid').classList.remove('edit-mode');
                 this.updateRegisters();
                 this.renderMemory();
                 this.updateStatus();
@@ -633,6 +691,7 @@
             attachEventListeners() {
                 document.getElementById('stepBtn').addEventListener('click', () => this.step());
                 document.getElementById('runBtn').addEventListener('click', () => this.runAll());
+                document.getElementById('editBtn').addEventListener('click', () => this.toggleEditMode());
                 document.getElementById('resetBtn').addEventListener('click', () => this.reset());
             }
         }
